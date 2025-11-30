@@ -1,0 +1,123 @@
+import streamlit as st
+import pandas as pd
+from scipy.stats import pearsonr, mode
+
+st.title("statistics 1 – social media usage & study productivity")
+st.write("app ini dibuat untuk tugas survey statistics 1 (keysa amara, ie class 1).")
+
+# upload file
+uploaded_file = st.file_uploader("upload dataset (.xlsx atau .csv)", type=["xlsx", "csv"])
+
+if uploaded_file is not None:
+    # baca data
+    if uploaded_file.name.endswith(".xlsx"):
+        df = pd.read_excel(uploaded_file)
+    else:
+        df = pd.read_csv(uploaded_file)
+
+    st.subheader("preview data")
+    st.dataframe(df.head())
+
+    # anggap 12 kolom terakhir = 6 item x + 6 item y (sesuai form keysa)
+    likert_cols = df.columns[-12:]
+    X_cols = likert_cols[:6]   # 6 item social media usage
+    Y_cols = likert_cols[6:]   # 6 item study productivity
+
+    st.write("item variabel X (social media usage):")
+    st.write(list(X_cols))
+
+    st.write("item variabel Y (study productivity):")
+    st.write(list(Y_cols))
+
+    # pastikan numerik
+    df[X_cols] = df[X_cols].apply(pd.to_numeric, errors="coerce")
+    df[Y_cols] = df[Y_cols].apply(pd.to_numeric, errors="coerce")
+
+    # fungsi statistik deskriptif
+    def descriptive_table(data, cols):
+        stats = data[cols].agg(["mean", "median", "min", "max", "std"]).T
+        modes = []
+        for c in cols:
+            m = mode(data[c], keepdims=True).mode[0]
+            modes.append(m)
+        stats["mode"] = modes
+        stats = stats[["mean", "median", "mode", "min", "max", "std"]]
+        return stats
+
+    # fungsi tabel frekuensi & persentase
+    def frequency_table(data, col):
+        counts = data[col].value_counts().sort_index()
+        perc = (counts / len(data)) * 100
+        freq_df = pd.DataFrame(
+            {
+                "skor": counts.index,
+                "frekuensi": counts.values,
+                "persentase (%)": perc.round(2),
+            }
+        )
+        return freq_df
+
+    # deskriptif item x
+    st.subheader("deskriptif – setiap item X (social media usage)")
+    st.dataframe(descriptive_table(df, X_cols))
+
+    st.subheader("tabel frekuensi & persentase – setiap item X")
+    for col in X_cols:
+        st.markdown(f"**{col}**")
+        freq_df = frequency_table(df, col)
+        st.dataframe(freq_df)
+
+    # deskriptif item y
+    st.subheader("deskriptif – setiap item Y (study productivity)")
+    st.dataframe(descriptive_table(df, Y_cols))
+
+    st.subheader("tabel frekuensi & persentase – setiap item Y")
+    for col in Y_cols:
+        st.markdown(f"**{col}**")
+        freq_df = frequency_table(df, col)
+        st.dataframe(freq_df)
+
+    # skor total x & y
+    df["X_total"] = df[X_cols].sum(axis=1)
+    df["Y_total"] = df[Y_cols].sum(axis=1)
+
+    st.subheader("deskriptif – skor total X dan Y")
+
+    total_stats = {
+        "X_total_mean": df["X_total"].mean(),
+        "X_total_median": df["X_total"].median(),
+        "X_total_min": df["X_total"].min(),
+        "X_total_max": df["X_total"].max(),
+        "X_total_std": df["X_total"].std(),
+        "Y_total_mean": df["Y_total"].mean(),
+        "Y_total_median": df["Y_total"].median(),
+        "Y_total_min": df["Y_total"].min(),
+        "Y_total_max": df["Y_total"].max(),
+        "Y_total_std": df["Y_total"].std(),
+    }
+    st.write(total_stats)
+
+    # korelasi pearson
+    st.subheader("korelasi antara X_total dan Y_total (pearson)")
+
+    r, p = pearsonr(df["X_total"], df["Y_total"])
+    st.write(f"nilai korelasi (r): {r:.4f}")
+    st.write(f"p-value: {p:.4f}")
+
+    if p < 0.05:
+        st.write("interpretasi: hubungan **signifikan secara statistik** (p < 0.05).")
+    else:
+        st.write("interpretasi: hubungan **tidak signifikan secara statistik** (p ≥ 0.05).")
+
+    if r > 0:
+        arah = "positif"
+    elif r < 0:
+        arah = "negatif"
+    else:
+        arah = "tidak ada (mendekati nol)"
+
+    st.write(f"arah hubungan: {arah}.")
+
+    # scatterplot
+    st.subheader("scatterplot X_total vs Y_total")
+    st.scatter_chart(df[["X_total", "Y_total"]])
